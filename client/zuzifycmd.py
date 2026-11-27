@@ -1,10 +1,14 @@
 import secrets, random, colorsys, base64, datetime, getpass, hashlib, json, math, os, platform, re, shutil, sys, threading, time, uuid
 from pathlib import Path
+import blossom
+import terminal_ui as tui
+import difflib
+import unicodedata
 from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
-VERSION = "1.2.0.1a"
+VERSION = "1.2.0.2a"
 RELEASE_API = "https://api.github.com/repos/taithedev/ZuzifyCMD/releases/latest"
 API = "https://zuzifycmd.vercel.app/api/cmd"
 INSTALL = ""
@@ -17,7 +21,9 @@ RARITIES = (
     ("pink","Legendary",1.8),("rainbow","Mythic",0.2),
 )
 PALETTE, RARITY, CHANCE = random.SystemRandom().choices(RARITIES,weights=[r[2] for r in RARITIES],k=1)[0]
-STARTUP_FLOWER = (PALETTE,RARITY,CHANCE)
+ROLLED_FLOWER = (PALETTE,RARITY,CHANCE)
+STARTUP_FLOWER = ROLLED_FLOWER
+CLOUD_STATE = 'Offline'
 
 START = time.monotonic()
 RESET = "\033[0m"
@@ -48,52 +54,18 @@ def enable_vt():
             k.SetConsoleMode(handle,mode.value|4)
 
 def flower_frame(phase,width=85,height=35,color=False,bloom=1.0):
-    pixels=[[None]*width for _ in range(height)]
-    ca,sa=math.cos(phase*.27),math.sin(phase*.27)
-    tilt=.36+.18*math.sin(phase*.45);ct,st=math.cos(tilt),math.sin(tilt)
-    def point(x,y,z,shade):
-        x,y=x*ca-y*sa,x*sa+y*ca
-        y,z=y*ct-z*st,y*st+z*ct
-        scale=min((width-2)/4.7,(height-2)/2.7)*max(.025,bloom)
-        p=5/(5-z)
-        ix=round((width-1)/2+x*scale*2*p);iy=round((height-1)/2-y*scale*p)
-        if 0<=ix<width and 0<=iy<height and (pixels[iy][ix] is None or z>pixels[iy][ix][0]):
-            pixels[iy][ix]=(z,max(0,min(1,shade)))
-    for layer,count in enumerate((7,6,5,4)):
-        opening=min(1,max(.04,bloom*1.55-layer*.12))
-        for petal in range(count):
-            theta=petal*2*math.pi/count+layer*.8;cs,sn=math.cos(theta),math.sin(theta)
-            for i in range(29):
-                u=i/28
-                r=.09+u*(1.14-layer*.21)*opening
-                spread=(.51-layer*.075)*math.sin(math.pi*u)**.65*opening
-                for j in range(21):
-                    v=j/10-1;y=v*spread
-                    z=.10+layer*.16+.25*u+.33*v*v*u+.28*u**6+(1-opening)*u*.55
-                    z+=.035*math.sin(v*13+u*14+petal)*u
-                    shade=.24+.34*u+.22*abs(v)+.16*math.cos(theta+phase*.27+1.0)+.11*math.sin(u*17+v*8)
-                    point(r*cs-y*sn,r*sn+y*cs,z,shade)
-    for i in range(12):
-        r=.13*i/11
-        for j in range(40):
-            t=j*2*math.pi/40
-            point(r*math.cos(t),r*math.sin(t),.84-r*.9,.5+.35*math.sin(t*3+phase))
-    chars=".:;i1l+ox%#@";hues={"blue":.59,"red":.99,"orange":.075,"yellow":.15,"purple":.76,"pink":.92,"white":0}
-    rows=[]
-    for iy,row in enumerate(pixels):
-        line=[];prev=None
-        for ix,pix in enumerate(row):
-            if pix is None:
-                if color and prev is not None:line.append(RESET);prev=None
-                line.append(" ");continue
-            _,s=pix;band=min(11,int(s*12));ch=chars[band]
-            hue=(ix/max(width,1)+iy/max(height,1)*.4+phase*.06)%1 if PALETTE=="rainbow" else hues.get(PALETTE,.92)
-            rgb=tuple(round(v*255) for v in colorsys.hsv_to_rgb(hue,0 if PALETTE=="white" else .88-.70*s,.24+.76*s))
-            if color and rgb!=prev:line.append("\033[38;2;%d;%d;%dm"%rgb);prev=rgb
-            line.append(ch)
-        if color:line.append(RESET)
-        rows.append("".join(line))
-    return "\n".join(rows)
+    return blossom.frame(phase,width,height,color,bloom,PALETTE)
+
+def apply_flower_rank():
+    global PALETTE,RARITY,CHANCE,STARTUP_FLOWER
+    desired=("rainbow","Owner exclusive",100.0) if PROFILE.get("rank")=="owner" else ROLLED_FLOWER
+    if STARTUP_FLOWER!=desired:
+        PALETTE,RARITY,CHANCE=desired
+        STARTUP_FLOWER=desired
+
+def flower_label():
+    color,tier,chance=STARTUP_FLOWER
+    return f"{color.title()} / {tier} / "+("Guaranteed" if tier=="Owner exclusive" else f"{chance:g}% chance")
 
 def animate(duration=15,done=None,label="Initializing ZuzifyCMD"):
     if not TTY:return
@@ -108,7 +80,7 @@ def animate(duration=15,done=None,label="Initializing ZuzifyCMD"):
             art=flower_frame(elapsed,w,h,True,grow)
             pad=" "*max(0,(size.columns-w)//2);bar="━"*int(24*elapsed/duration)+"─"*(24-int(24*elapsed/duration))
             status="Cloud synchronized" if done and done.is_set() and BOOT else label
-            rarity_label=(f"{RARITY.upper()}  /  {PALETTE.upper()}  /  {CHANCE:g}% startup chance" if (PALETTE,RARITY,CHANCE)==STARTUP_FLOWER else f"{PALETTE.upper()}  /  PREVIEW")
+            rarity_label=flower_label().upper() if PALETTE==STARTUP_FLOWER[0] else f"{PALETTE.upper()} / PREVIEW"
             if elapsed<duration*.65:rarity_label="B L O O M I N G"
             print("\033[H"+"\n".join("\033[2K"+pad+r for r in art.split("\n"))+"\n\033[2K"+paint(("Z U Z I F Y  /  C M D   "+VERSION).center(max(15,size.columns-1)),WHITE)+"\n\033[2K"+paint((bar+"  "+str(int(elapsed/duration*100))+"%").center(max(15,size.columns-1)),DIM)+"\n\033[2K"+paint(status.center(max(15,size.columns-1)),DIM)+"\n\033[2K"+paint(rarity_label.center(max(15,size.columns-1)),WHITE),end="",flush=True)
             time.sleep(.035)
@@ -145,6 +117,7 @@ def initialize():
     if token:
         try:PROFILE.update(cloud("me"));user=safe(PROFILE["username"])
         except RuntimeError:token=""
+    apply_flower_rank()
 
 def heartbeat():
     global token,user
@@ -152,22 +125,23 @@ def heartbeat():
         try:BOOT.update(cloud("bootstrap",install=INSTALL,version=VERSION))
         except RuntimeError:pass
         if token:
-            try:PROFILE.update(cloud("heartbeat"))
+            try:PROFILE.update(cloud("heartbeat"));apply_flower_rank()
             except RuntimeError as e:
                 if "Session expired" in str(e) or "Sign in required" in str(e):
-                    token="";user="guest";PROFILE.clear()
+                    token="";user="guest";PROFILE.clear();apply_flower_rank()
                     try:
                         import keyring
                         keyring.delete_password("ZuzifyCMD","session")
                     except Exception:pass
                     print("\n  Session revoked. Sign in again.",flush=True)
 
+CORE.update({"dashboard":"Show the Zuzify dashboard","status":"Show connection and session status","history":"Show recent command names","shortcuts":"Show keyboard shortcuts","categories":"List command groups","textstats":"Analyze text length","slug":"Convert text to a URL slug","timestamp":"Print Unix timestamp","fromtimestamp":"Convert Unix timestamp to UTC","randomnum":"Generate a random integer"})
 CORE.update({"rarity":"Show startup flower rarity","rarities":"List flower rarity chances","search":"Search command names and descriptions","login":"Sign in","register":"Create account","profile":"Show rank and profile","redeem":"Redeem a license key","friends":"Show friend requests and friends","friendadd":"Add a friend","friendaccept":"Accept a request","friendremove":"Remove a friend","discord":"Create an eight digit pairing code","discordunlink":"Unlink Discord","prostatus":"View paid entitlement","ownerstats":"Owner dashboard","ownerusers":"List users and presence","ownerban":"Ban account","ownerunban":"Unban account","ownerkick":"Revoke user sessions","ownerrank":"Change rank","ownerkey":"Create a Pro license","ownermotd":"Set message of the day","owneraudit":"Review moderation audit","motd":"Show message of the day","online":"Show active app count","calc":"Basic calculator","reverse":"Reverse text","count":"Count characters and words","upper":"Uppercase text","lower":"Lowercase text","json":"Format JSON","hex":"Encode text as hex","unhex":"Decode hex","timer":"Start a local timer","color":"Select loader color","export":"Export your profile to JSON"})
 UNITS = {"length":{"mm":0.001,"cm":0.01,"dm":0.1,"m":1,"km":1000,"um":0.000001,"nm":1e-9,"in":0.0254,"ft":0.3048,"yd":0.9144,"mi":1609.344,"nmi":1852,"ang":1e-10,"fathom":1.8288,"furlong":201.168},"mass":{"mg":0.000001,"g":0.001,"kg":1,"t":1000,"ug":1e-9,"lb":0.45359237,"oz":0.028349523125,"st":6.35029318,"grain":0.00006479891,"carat":0.0002,"shortton":907.18474,"longton":1016.0469088},"time":{"ms":0.001,"s":1,"min":60,"h":3600,"d":86400,"w":604800,"us":0.000001,"ns":1e-9,"fortnight":1209600,"day365":31536000}}
 CONVERSIONS = {f"{cat}_{a}_{b}":(cat,a,b) for cat,units in UNITS.items() for a in units for b in units if a!=b}
 
 def refresh():
-    global catalog
+    global catalog,CLOUD_STATE
     local={k:{"handler":k,"description":v,"category":"local"} for k,v in CORE.items()}
     local.update({k:{"handler":v,"description":"Alias for "+v,"category":"local"} for k,v in ALIASES.items()})
     local.update({k:{"handler":"convert","description":f"Convert {a} to {b}","category":cat} for k,(cat,a,b) in CONVERSIONS.items()})
@@ -182,6 +156,7 @@ def refresh():
         status="Cloud catalog synchronized"
     except Exception: status="Offline catalog"
     catalog=local
+    CLOUD_STATE="Connected" if status=="Cloud catalog synchronized" else "Offline"
     return status
 
 def version_tuple(s):
@@ -267,12 +242,14 @@ def sign_in(action,initial_name=""):
     user=safe(result["username"]);token=result["token"]
     try:PROFILE.update(cloud("me"))
     except RuntimeError:PROFILE.update({"username":user})
+    apply_flower_rank()
     if input("  Remember session on this PC? [y/N] ").strip().lower()=="y":
         try:
             import keyring
             keyring.set_password("ZuzifyCMD","session",token)
         except Exception:print("  Credential storage unavailable.")
     print("  Signed in as "+user+" / "+refresh())
+    print("  Flower: "+flower_label())
 
 def execute(handler,arg,name=""):
     global user,token,ACCENT,PALETTE
@@ -283,15 +260,34 @@ def execute(handler,arg,name=""):
                 if name.startswith("owner") and PROFILE.get("rank")!="owner":continue
                 print(paint("  "+name.ljust(22),ACCENT)+row["description"])
     elif handler=="rarity":
-        print(f"Startup: {STARTUP_FLOWER[0].title()} | {STARTUP_FLOWER[1]} | {STARTUP_FLOWER[2]:g}%")
+        print("  Flower: "+flower_label())
     elif handler=="rarities":
         for color,tier,chance in RARITIES:print(f"  {color.title():12} {tier:12} {chance:g}%")
+        print("  Verified owners: guaranteed rainbow")
     elif handler=="search":
         q=arg.lower().strip()
         if not q:raise ValueError("Use search <term>")
         for n,row in sorted(catalog.items()):
             if n.startswith("owner") and PROFILE.get("rank")!="owner":continue
             if q in (n+" "+row["description"]).lower():print(f"  {n:24} {row['description']}")
+    elif handler=="dashboard":
+        clear();show_dashboard()
+    elif handler=="status":
+        print("  Cloud:",CLOUD_STATE,"| Account:",user,"| Rank:",PROFILE.get("rank","guest"))
+        print("  Flower:",flower_label())
+    elif handler=="history":
+        for idx,cmd in enumerate(tui.HISTORY,1):print(f"  {idx:3}  {cmd}")
+    elif handler=="shortcuts":print("  Tab: complete | Up/Down: command history | Home/End: navigate | Esc: clear | Ctrl+U: delete to start")
+    elif handler=="categories":
+        from collections import Counter
+        for cat,n in sorted(Counter(row["category"] for row in catalog.values()).items()):
+            if cat!="owner" or PROFILE.get("rank")=="owner":print(f"  {cat:18} {n}")
+    elif handler=="textstats":print(f"  {len(arg)} chars | {len(arg.split())} words | {len(arg.encode())} UTF-8 bytes")
+    elif handler=="slug":print(re.sub(r"[^a-z0-9]+","-",unicodedata.normalize("NFKD",arg).encode("ascii","ignore").decode().lower()).strip("-"))
+    elif handler=="timestamp":print(int(time.time()))
+    elif handler=="fromtimestamp":print(datetime.datetime.fromtimestamp(float(arg),datetime.timezone.utc).isoformat())
+    elif handler=="randomnum":
+        lo,hi=map(int,arg.split());print(lo+secrets.randbelow(hi-lo+1))
     elif handler=="clear":clear()
     elif handler=="exit":return False
     elif handler in ("login","register"):sign_in(handler,arg)
@@ -304,7 +300,7 @@ def execute(handler,arg,name=""):
         try:
             if token:cloud("logout")
         finally:
-            user,token="guest","";PROFILE.clear()
+            user,token="guest","";PROFILE.clear();apply_flower_rank()
             try:
                 import keyring
                 keyring.delete_password("ZuzifyCMD","session")
@@ -327,7 +323,7 @@ def execute(handler,arg,name=""):
     elif handler=="theme":
         ACCENT="\033[96m" if ACCENT==WHITE else WHITE
         print(paint("Theme changed.",ACCENT))
-    elif handler=="flower":animate(2);clear()
+    elif handler=="flower":animate(5);clear();show_dashboard()
     elif handler=="convert":
         cat,a,b=CONVERSIONS[name];v=float(arg)
         if not math.isfinite(v):raise ValueError("Enter a finite number")
@@ -335,7 +331,7 @@ def execute(handler,arg,name=""):
     elif handler in ("profile","friends","prostatus","ownerstats","ownerusers","owneraudit","ownerkey","discord","discordunlink"):
         actions={"profile":"me","friends":"friends","prostatus":"pro_status","ownerstats":"admin_stats","ownerusers":"admin_users","owneraudit":"admin_audit","ownerkey":"admin_license","discord":"discord_pair","discordunlink":"discord_unlink"}
         result=cloud(actions[handler])
-        print(safe(json.dumps(result,indent=2)).replace("\\n","\n") if False else json.dumps(result,indent=2,ensure_ascii=True))
+        print(json.dumps(result,indent=2,ensure_ascii=True))
         if handler=="discord":print("Pair using your trusted Discord bot when enabled. Code expires in 5 minutes.")
     elif handler in ("friendadd","friendaccept","friendremove","ownerban","ownerunban","ownerkick"):
         actions={"friendadd":"friend_add","friendaccept":"friend_accept","friendremove":"friend_remove","ownerban":"admin_ban","ownerunban":"admin_unban","ownerkick":"admin_kick"}
@@ -367,7 +363,12 @@ def execute(handler,arg,name=""):
         time.sleep(seconds);print("Timer finished.")
     elif handler=="color":
         if arg not in ("blue","red","orange","yellow","purple","pink","white","rainbow"):raise ValueError("Choose blue/red/orange/yellow/purple/pink/white/rainbow")
-        PALETTE=arg;animate(4);clear()
+        if PROFILE.get("rank")=="owner" and arg!="rainbow":print("  Owner flower is locked to rainbow.");return True
+        previous=PALETTE
+        try:
+            PALETTE=arg;animate(4)
+        finally:PALETTE=previous
+        clear();show_dashboard()
     elif handler=="export":
         result=cloud("pro_status")
         profile=cloud("me");folder=Path.home()/"Downloads";folder.mkdir(exist_ok=True)
@@ -375,9 +376,15 @@ def execute(handler,arg,name=""):
     elif handler=="about":print("ZuzifyCMD "+VERSION+" / By Zuzify")
     return True
 
+def show_dashboard():
+    tui.dashboard(VERSION,user,PROFILE.get("rank","guest"),CLOUD_STATE,len(catalog),flower_label(),BOOT.get("motd",""),TTY)
+
 def main():
     if "--self-test" in sys.argv:
-        assert version_tuple("v1.2.0.1a")==(1,2,0,1,97)
+        assert version_tuple("v1.2.0.2a")==(1,2,0,2,97)
+        PROFILE["rank"]="owner";apply_flower_rank();assert STARTUP_FLOWER[0]=="rainbow" and STARTUP_FLOWER[2]==100
+        PROFILE.clear();apply_flower_rank();assert STARTUP_FLOWER==ROLLED_FLOWER
+        assert len(blossom.petals())>19000
         assert abs(sum(r[2] for r in RARITIES)-100)<1e-9
         assert min(RARITIES,key=lambda r:r[2])[0]=="rainbow"
         assert next(r for r in RARITIES if r[0]=="white")[1]=="Uncommon"
@@ -391,31 +398,32 @@ def main():
         assert safe("hello\033[31m")=="hello[31m"
         print("Self-test passed.");return
     enable_vt()
-    initialize()
     done=threading.Event();status=[]
     def boot():
-        try:status.append(refresh())
+        try:
+            initialize();status.append(refresh())
         finally:done.set()
     threading.Thread(target=boot,daemon=True).start()
     
     animate(done=done,label="Syncing account and command catalog");done.wait(timeout=1)
     if not catalog:refresh()
+    apply_flower_rank()
     threading.Thread(target=heartbeat,daemon=True).start()
     update_background()
     clear()
-    print(paint("  Z U Z I F Y  /  C M D",ACCENT))
-    print(paint("  v"+VERSION+" | "+(status[0] if status else "Offline")+" | help for commands",DIM))
-    print("  login / register / help | "+str(len(catalog))+" commands")
-    print(f"  Flower: {STARTUP_FLOWER[0].title()} / {STARTUP_FLOWER[1]} ({STARTUP_FLOWER[2]:g}%)")
-    if BOOT.get("motd"):print("  "+safe(BOOT["motd"]))
+    show_dashboard()
     notified=False
     while True:
         if updates and not notified:print(paint("  "+updates["status"],DIM));notified=True
         try:
-            raw=input(paint("\n"+user+"@zuzify",ACCENT)+" > ").strip()
+            visible=[n for n in catalog if not n.startswith("owner") or PROFILE.get("rank")=="owner"]
+            raw=tui.read_command(paint("\n"+user+"@zuzify",ACCENT)+paint(" ["+safe(PROFILE.get("rank","guest"))+"]",DIM)+" > ",visible).strip()
             if not raw:continue
             name,_,arg=raw.partition(" ");row=catalog.get(name.lower())
-            if not row:print("Unknown command. Type help.");continue
+            if not row:
+                suggestions=difflib.get_close_matches(name.lower(),visible,n=3,cutoff=.55)
+                print("  Unknown command."+(" Did you mean "+", ".join(suggestions)+"?" if suggestions else " Type help."));continue
+            tui.remember(name.lower())
             if not execute(row["handler"],arg,name.lower()):break
         except (KeyboardInterrupt,EOFError):print("\nBye.");break
         except Exception as e:print("  Error: "+safe(e)[:200])
