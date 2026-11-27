@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
-VERSION = "1.2.0.2a"
+VERSION = "1.2.0.3a"
 RELEASE_API = "https://api.github.com/repos/taithedev/ZuzifyCMD/releases/latest"
 API = "https://zuzifycmd.vercel.app/api/cmd"
 INSTALL = ""
@@ -381,10 +381,14 @@ def show_dashboard():
 
 def main():
     if "--self-test" in sys.argv:
-        assert version_tuple("v1.2.0.2a")==(1,2,0,2,97)
+        assert version_tuple("v1.2.0.3a")==(1,2,0,3,97)
         PROFILE["rank"]="owner";apply_flower_rank();assert STARTUP_FLOWER[0]=="rainbow" and STARTUP_FLOWER[2]==100
         PROFILE.clear();apply_flower_rank();assert STARTUP_FLOWER==ROLLED_FLOWER
         assert len(blossom.petals())>19000
+        assert all(len(row)==85 for row in flower_frame(1).splitlines())
+        assert "Guaranteed" not in flower_label()
+        tui.remember("help");tui.remember("help");assert list(tui.HISTORY)==["help"]
+        tui.HISTORY.clear()
         assert abs(sum(r[2] for r in RARITIES)-100)<1e-9
         assert min(RARITIES,key=lambda r:r[2])[0]=="rainbow"
         assert next(r for r in RARITIES if r[0]=="white")[1]=="Uncommon"
