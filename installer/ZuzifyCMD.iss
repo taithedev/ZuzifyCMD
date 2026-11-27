@@ -1,7 +1,8 @@
 [Setup]
 AppId=ZuzifyCMD
 AppName=ZuzifyCMD
-AppVersion=1.2.0.0a
+AppVersion=1.2.0.1a
+SetupIconFile=..\assets\zuzifycmd.ico
 AppPublisher=Zuzify
 DefaultDirName={localappdata}\Programs\ZuzifyCMD
 DefaultGroupName=ZuzifyCMD

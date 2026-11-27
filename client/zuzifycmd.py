@@ -4,14 +4,21 @@ from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
-VERSION = "1.2.0.0a"
+VERSION = "1.2.0.1a"
 RELEASE_API = "https://api.github.com/repos/taithedev/ZuzifyCMD/releases/latest"
 API = "https://zuzifycmd.vercel.app/api/cmd"
 INSTALL = ""
 PROFILE = {}
 BOOT = {}
 STOP = threading.Event()
-PALETTE = random.choice(["blue","red","orange","yellow","purple","pink","white","rainbow"])
+RARITIES = (
+    ("blue","Common",30.0),("red","Common",25.0),("orange","Common",20.0),
+    ("white","Uncommon",12.0),("yellow","Rare",7.0),("purple","Epic",4.0),
+    ("pink","Legendary",1.8),("rainbow","Mythic",0.2),
+)
+PALETTE, RARITY, CHANCE = random.SystemRandom().choices(RARITIES,weights=[r[2] for r in RARITIES],k=1)[0]
+STARTUP_FLOWER = (PALETTE,RARITY,CHANCE)
+
 START = time.monotonic()
 RESET = "\033[0m"
 DIM = "\033[90m"
@@ -96,12 +103,14 @@ def animate(duration=15,done=None,label="Initializing ZuzifyCMD"):
         while True:
             elapsed=time.monotonic()-start
             if elapsed>=duration:break
-            size=shutil.get_terminal_size((110,42));w=max(15,min(101,size.columns-4));h=max(7,min(39,size.lines-5))
+            size=shutil.get_terminal_size((110,42));w=max(15,min(101,size.columns-4));h=max(7,min(39,size.lines-6))
             grow=min(1,elapsed/max(.1,duration*.65));grow=grow*grow*(3-2*grow)
             art=flower_frame(elapsed,w,h,True,grow)
             pad=" "*max(0,(size.columns-w)//2);bar="━"*int(24*elapsed/duration)+"─"*(24-int(24*elapsed/duration))
             status="Cloud synchronized" if done and done.is_set() and BOOT else label
-            print("\033[H"+"\n".join("\033[2K"+pad+r for r in art.split("\n"))+"\n\033[2K"+paint(("Z U Z I F Y  /  C M D   "+VERSION).center(max(15,size.columns-1)),WHITE)+"\n\033[2K"+paint((bar+"  "+str(int(elapsed/duration*100))+"%").center(max(15,size.columns-1)),DIM)+"\n\033[2K"+paint(status.center(max(15,size.columns-1)),DIM),end="",flush=True)
+            rarity_label=(f"{RARITY.upper()}  /  {PALETTE.upper()}  /  {CHANCE:g}% startup chance" if (PALETTE,RARITY,CHANCE)==STARTUP_FLOWER else f"{PALETTE.upper()}  /  PREVIEW")
+            if elapsed<duration*.65:rarity_label="B L O O M I N G"
+            print("\033[H"+"\n".join("\033[2K"+pad+r for r in art.split("\n"))+"\n\033[2K"+paint(("Z U Z I F Y  /  C M D   "+VERSION).center(max(15,size.columns-1)),WHITE)+"\n\033[2K"+paint((bar+"  "+str(int(elapsed/duration*100))+"%").center(max(15,size.columns-1)),DIM)+"\n\033[2K"+paint(status.center(max(15,size.columns-1)),DIM)+"\n\033[2K"+paint(rarity_label.center(max(15,size.columns-1)),WHITE),end="",flush=True)
             time.sleep(.035)
     finally:print("\033[?25h"+RESET,end="",flush=True)
 
@@ -153,7 +162,7 @@ def heartbeat():
                     except Exception:pass
                     print("\n  Session revoked. Sign in again.",flush=True)
 
-CORE.update({"login":"Sign in","register":"Create account","profile":"Show rank and profile","redeem":"Redeem a license key","friends":"Show friend requests and friends","friendadd":"Add a friend","friendaccept":"Accept a request","friendremove":"Remove a friend","discord":"Create an eight digit pairing code","discordunlink":"Unlink Discord","prostatus":"View paid entitlement","ownerstats":"Owner dashboard","ownerusers":"List users and presence","ownerban":"Ban account","ownerunban":"Unban account","ownerkick":"Revoke user sessions","ownerrank":"Change rank","ownerkey":"Create a Pro license","ownermotd":"Set message of the day","owneraudit":"Review moderation audit","motd":"Show message of the day","online":"Show active app count","calc":"Basic calculator","reverse":"Reverse text","count":"Count characters and words","upper":"Uppercase text","lower":"Lowercase text","json":"Format JSON","hex":"Encode text as hex","unhex":"Decode hex","timer":"Start a local timer","color":"Select loader color","export":"Export your profile to JSON"})
+CORE.update({"rarity":"Show startup flower rarity","rarities":"List flower rarity chances","search":"Search command names and descriptions","login":"Sign in","register":"Create account","profile":"Show rank and profile","redeem":"Redeem a license key","friends":"Show friend requests and friends","friendadd":"Add a friend","friendaccept":"Accept a request","friendremove":"Remove a friend","discord":"Create an eight digit pairing code","discordunlink":"Unlink Discord","prostatus":"View paid entitlement","ownerstats":"Owner dashboard","ownerusers":"List users and presence","ownerban":"Ban account","ownerunban":"Unban account","ownerkick":"Revoke user sessions","ownerrank":"Change rank","ownerkey":"Create a Pro license","ownermotd":"Set message of the day","owneraudit":"Review moderation audit","motd":"Show message of the day","online":"Show active app count","calc":"Basic calculator","reverse":"Reverse text","count":"Count characters and words","upper":"Uppercase text","lower":"Lowercase text","json":"Format JSON","hex":"Encode text as hex","unhex":"Decode hex","timer":"Start a local timer","color":"Select loader color","export":"Export your profile to JSON"})
 UNITS = {"length":{"mm":0.001,"cm":0.01,"dm":0.1,"m":1,"km":1000,"um":0.000001,"nm":1e-9,"in":0.0254,"ft":0.3048,"yd":0.9144,"mi":1609.344,"nmi":1852,"ang":1e-10,"fathom":1.8288,"furlong":201.168},"mass":{"mg":0.000001,"g":0.001,"kg":1,"t":1000,"ug":1e-9,"lb":0.45359237,"oz":0.028349523125,"st":6.35029318,"grain":0.00006479891,"carat":0.0002,"shortton":907.18474,"longton":1016.0469088},"time":{"ms":0.001,"s":1,"min":60,"h":3600,"d":86400,"w":604800,"us":0.000001,"ns":1e-9,"fortnight":1209600,"day365":31536000}}
 CONVERSIONS = {f"{cat}_{a}_{b}":(cat,a,b) for cat,units in UNITS.items() for a in units for b in units if a!=b}
 
@@ -205,28 +214,87 @@ def download_update(info):
     finally:
         if partial.exists():partial.unlink()
 
-def sign_in(action):
+def password_problem(password,username,register=True):
+    if not password:return "Password is empty."
+    if len(password.encode("utf-8"))>72:return "Password exceeds 72 UTF-8 bytes."
+    if register and len(password)<8:return "Use at least 8 characters (15+ recommended)."
+    if register and (password.lower()==username or password.lower() in {"password","password1","password123","12345678","123456789","1234567890","qwerty123","letmein123","iloveyou","admin123","qwertyuiop","11111111","abcdefgh","welcome123"}):return "Choose a less predictable password."
+    return ""
+
+def masked_password(prompt):
+    # On native Windows show asterisks so typing feedback is visible.
+    if os.name!="nt" or not sys.stdin.isatty():return getpass.getpass(prompt)
+    import msvcrt
+    chars=[]
+    print(prompt,end="",flush=True)
+    while True:
+        c=msvcrt.getwch()
+        if c in ("\r","\n"):print();return "".join(chars)
+        if c=="\x03":print();raise KeyboardInterrupt
+        if c=="\x1b":print();return None
+        if c in ("\x00","\xe0"):msvcrt.getwch();continue
+        if c=="\b":
+            if chars:chars.pop();print("\b \b",end="",flush=True)
+        elif c.isprintable() and len(chars)<72:
+            chars.append(c);print("*",end="",flush=True)
+
+def sign_in(action,initial_name=""):
     global user,token
-    name=input("  Username: ").strip()
-    password=getpass.getpass("  Password: ")
-    if action=="register" and getpass.getpass("  Confirm password: ")!=password:print("Passwords do not match.");return
-    result=cloud(action,username=name,password=password)
-    user=safe(result["username"]);token=result["token"];PROFILE.update(cloud("me"))
-    if input("  Remember session on this PC? [y/N] ").lower()=="y":
+    if token:print("Already signed in. Use logout to switch accounts.");return
+    print("\n  "+("CREATE ACCOUNT" if action=="register" else "SIGN IN")+"  |  Enter / Esc to cancel")
+    if action=="register":print("  Username: 3-24 letters, numbers or underscores. Password: 8+ characters (15+ recommended).")
+    name=initial_name.strip().lower()
+    while not re.fullmatch(r"[a-z0-9_]{3,24}",name):
+        name=input("  Username (blank to cancel): ").strip().lower()
+        if not name:return
+        if not re.fullmatch(r"[a-z0-9_]{3,24}",name):print("  Invalid username. Try again.")
+    while True:
+        password=masked_password("  Password: ")
+        if password is None:return
+        problem=password_problem(password,name,action=="register")
+        if problem:print("  "+problem);continue
+        if action=="register":
+            confirm=masked_password("  Confirm password: ")
+            if confirm is None:return
+            if confirm!=password:print("  Passwords do not match. Try again.");continue
+        try:result=cloud(action,username=name,password=password)
+        except RuntimeError as e:
+            print("  "+safe(e))
+            if "password" in str(e).lower() and "Too many" not in str(e):continue
+            return
+        finally:password=None
+        break
+    user=safe(result["username"]);token=result["token"]
+    try:PROFILE.update(cloud("me"))
+    except RuntimeError:PROFILE.update({"username":user})
+    if input("  Remember session on this PC? [y/N] ").strip().lower()=="y":
         try:
             import keyring
             keyring.set_password("ZuzifyCMD","session",token)
-        except Exception:print("Credential storage unavailable.")
+        except Exception:print("  Credential storage unavailable.")
     print("  Signed in as "+user+" / "+refresh())
 
 def execute(handler,arg,name=""):
     global user,token,ACCENT,PALETTE
     if handler=="help":
+        print("  "+str(len(catalog))+" commands. Use search <term>, help all, or help <category>.")
         for name,row in sorted(catalog.items(),key=lambda item:(item[1]["category"],item[0])):
-            print(paint("  "+name.ljust(14),ACCENT)+row["description"])
+            if arg=="all" or arg==row["category"] or (not arg and row["handler"]!="convert"):
+                if name.startswith("owner") and PROFILE.get("rank")!="owner":continue
+                print(paint("  "+name.ljust(22),ACCENT)+row["description"])
+    elif handler=="rarity":
+        print(f"Startup: {STARTUP_FLOWER[0].title()} | {STARTUP_FLOWER[1]} | {STARTUP_FLOWER[2]:g}%")
+    elif handler=="rarities":
+        for color,tier,chance in RARITIES:print(f"  {color.title():12} {tier:12} {chance:g}%")
+    elif handler=="search":
+        q=arg.lower().strip()
+        if not q:raise ValueError("Use search <term>")
+        for n,row in sorted(catalog.items()):
+            if n.startswith("owner") and PROFILE.get("rank")!="owner":continue
+            if q in (n+" "+row["description"]).lower():print(f"  {n:24} {row['description']}")
     elif handler=="clear":clear()
     elif handler=="exit":return False
-    elif handler in ("login","register"):sign_in(handler)
+    elif handler in ("login","register"):sign_in(handler,arg)
     elif handler=="whoami":
         if token:
             try:print(cloud("me")["username"])
@@ -309,7 +377,13 @@ def execute(handler,arg,name=""):
 
 def main():
     if "--self-test" in sys.argv:
-        assert version_tuple("v1.2.0.0a")==(1,2,0,0,97)
+        assert version_tuple("v1.2.0.1a")==(1,2,0,1,97)
+        assert abs(sum(r[2] for r in RARITIES)-100)<1e-9
+        assert min(RARITIES,key=lambda r:r[2])[0]=="rainbow"
+        assert next(r for r in RARITIES if r[0]=="white")[1]=="Uncommon"
+        assert password_problem("","test_user")
+        assert password_problem("short","test_user")
+        assert not password_problem("correct-horse-battery-planet","test_user")
         assert len(CONVERSIONS)==432
         assert len(flower_frame(0).splitlines())==35
         assert "\033[38;2;" in flower_frame(0,color=True)
@@ -332,6 +406,7 @@ def main():
     print(paint("  Z U Z I F Y  /  C M D",ACCENT))
     print(paint("  v"+VERSION+" | "+(status[0] if status else "Offline")+" | help for commands",DIM))
     print("  login / register / help | "+str(len(catalog))+" commands")
+    print(f"  Flower: {STARTUP_FLOWER[0].title()} / {STARTUP_FLOWER[1]} ({STARTUP_FLOWER[2]:g}%)")
     if BOOT.get("motd"):print("  "+safe(BOOT["motd"]))
     notified=False
     while True:
