@@ -45,7 +45,7 @@ def flower_frame(phase,width=45,height=17):
         if 0<=x<width and 0<=y<height:
             grid[y][x]="@#*+."[min(4,int((math.sin(t*2+phase)+1)*2.49))]
     grid[height//2][width//2]="*"
-    return "\n".join("".join(row).rstrip() for row in grid)
+    return "\n".join("".join(row) for row in grid)
 def animate(duration=1.3,done=None,label="Starting ZuzifyCMD"):
     if not TTY: return
     end=time.monotonic()+duration
