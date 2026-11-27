@@ -1,20 +1,16 @@
-# ZuzifyCMD 1.0.0
-Windows-first terminal with a rotating ASCII flower, monochrome theme, Neon-backed accounts, and a server-managed command catalog. No Electron.
+# ZuzifyCMD 1.1.0
+Double-click ZuzifyCMD.exe from GitHub Releases. No PowerShell, Node server, API, or Electron required. The loader is a shaded pink/white 3D ASCII flower that grows from a glowing center. Offline commands work immediately.
 
-## Start locally
-1. Use Python 3.12 and Node 22.
-2. In the repository root, run `npm install`.
-3. Apply `database/schema.sql` in the intended Neon database if not already applied. Create a dedicated database login with only USAGE on zuzifycmd and SELECT/INSERT/UPDATE/DELETE on its tables (do not use the database owner in production).
-4. Set DATABASE_URL in the API host's secret settings, using the dedicated role and TLS. Run `npm start` for local development.
-5. In PowerShell: `$env:ZUZIFY_API_URL = "http://127.0.0.1:8787/api/cmd"; python client/zuzifycmd.py`.
-6. For a hosted deployment, deploy the repository to a Node-capable host such as Vercel (the API is api/cmd.js), set DATABASE_URL server-side, and set ZUZIFY_API_URL on the client to the HTTPS endpoint. Never put database credentials into the client.
+## Direct Neon setup (private/trusted desktop)
+The Neon project is Zuzify App Data, database zuzify, schema zuzifycmd. Direct SQL functions are installed. Create a dedicated restricted login role (not owner, no table permissions or inherited admin roles), and grant only:
+```sql
+GRANT CONNECT ON DATABASE zuzify TO your_restricted_role;
+GRANT USAGE ON SCHEMA zuzifycmd TO your_restricted_role;
+GRANT EXECUTE ON FUNCTION zuzifycmd.direct_catalog(), zuzifycmd.direct_auth(text,text,text), zuzifycmd.direct_session(text,text) TO your_restricted_role;
+```
+In the EXE, type connect, paste the restricted role's Neon URL at the hidden prompt, and optionally save it to Windows Credential Manager. TLS certificate and hostname verification are required. Use register or login for CMD accounts. Do not distribute shared database credentials or embed them in the EXE. For a public consumer service, use an identity-aware backend. The previous API source is retained for reference only; not needed by this client. Direct accounts use bcrypt and the old API uses a different format.
 
-Accounts are specific to CMD, not shared Zuzify Identity. Passwords are scrypt-hashed, session tokens are random, stored only as hashes in Neon and kept in memory on the client. Catalog rows map to built-in handlers, never execute remote shell code. Guests can use local utilities without an account.
- 
-## Windows build
-`python -m pip install pyinstaller==6.12.0` then `python -m PyInstaller --onefile --name ZuzifyCMD client/zuzifycmd.py`. The exe is in dist. Run `python client/zuzifycmd.py --self-test` for smoke tests.
- 
-The app checks the official GitHub latest stable release at startup in the background, and refreshes its command catalog on each start/login and on sync. If a newer EXE is available, the update command offers to download it, verifies the GitHub SHA-256 digest and leaves the file in your Downloads folder for manual launch. It does not silently execute new binaries.
- 
-## Admin
-Update command descriptions, enable flags, and aliases in the zuzifycmd.commands table. Only implemented local handlers can run. Use a restricted server database role, keep API protection enabled, and configure cleanup of expired sessions and old auth-attempt rows.
+Type help, sync, flower, or update. Startup checks GitHub for updates automatically; installation of verified downloads is manual.
+
+## Build
+Install requirements.txt with Python 3.12, then run python client/zuzifycmd.py --self-test. GitHub Actions builds and tests the Windows EXE before publishing.

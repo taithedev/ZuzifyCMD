@@ -4,9 +4,9 @@ from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 RELEASE_API = "https://api.github.com/repos/taithedev/ZuzifyCMD/releases/latest"
-API = os.getenv("ZUZIFY_API_URL", "").strip()
+DSN = ""
 START = time.monotonic()
 RESET = "\033[0m"
 DIM = "\033[90m"
@@ -16,9 +16,9 @@ TTY = sys.stdout.isatty()
 user, token = "guest", ""
 updates = {}
 catalog = {}
-CORE = {"help":"List commands","clear":"Clear display","exit":"Exit","whoami":"Show account","logout":"Sign out","sync":"Refresh catalog","update":"Check app update","version":"Show version","time":"Local time","date":"Local date","sysinfo":"OS and CPU count","uptime":"App uptime","echo":"Print text","uuid":"Random UUID","hash":"SHA-256 text","base64":"Encode text","decode64":"Decode Base64","theme":"Change theme","flower":"Preview loader","about":"About","login":"Sign in","register":"Create account"}
+CORE = {"help":"List commands","clear":"Clear display","exit":"Exit","whoami":"Show account","logout":"Sign out","sync":"Refresh catalog","update":"Check app update","version":"Show version","time":"Local time","date":"Local date","sysinfo":"OS and CPU count","uptime":"App uptime","echo":"Print text","uuid":"Random UUID","hash":"SHA-256 text","base64":"Encode text","decode64":"Decode Base64","theme":"Change theme","flower":"Preview loader","about":"About","login":"Sign in","register":"Create account","connect":"Connect to Neon","disconnect":"Forget Neon connection"}
 ALIASES = {"commands":"help","cls":"clear","now":"time","guid":"uuid"}
-ALWAYS = {"help","exit","login","register","logout","sync","update"}
+ALWAYS = {"help","exit","login","register","logout","sync","update","connect","disconnect"}
 
 def safe(value):
     return "".join(c for c in str(value) if c.isprintable())
@@ -35,50 +35,134 @@ def enable_vt():
         if k.GetConsoleMode(handle,ctypes.byref(mode)):
             k.SetConsoleMode(handle,mode.value|4)
 
-def flower_frame(phase,width=45,height=17):
-    grid=[[" "]*width for _ in range(height)]
-    for i in range(900):
-        t=2*math.pi*i/900
-        r=0.29+0.64*abs(math.cos(3*t+phase))
-        x=round((width-1)/2 + (width-2)*0.46*r*math.cos(t+phase*0.25))
-        y=round((height-1)/2 + (height-2)*0.50*r*math.sin(t+phase*0.25))
-        if 0<=x<width and 0<=y<height:
-            grid[y][x]="@#*+."[min(4,int((math.sin(t*2+phase)+1)*2.49))]
-    grid[height//2][width//2]="*"
-    return "\n".join("".join(row) for row in grid)
-def animate(duration=1.3,done=None,label="Starting ZuzifyCMD"):
-    if not TTY: return
-    end=time.monotonic()+duration
-    frame=0
-    print("\033[?25l",end="")
-    try:
-        while (time.monotonic()<end or (done and not done.is_set())):
-            width=max(15,min(45,shutil.get_terminal_size((80,24)).columns-4))
-            height=max(7,min(17,shutil.get_terminal_size((80,24)).lines-5))
-            clear()
-            print(paint("  Z U Z I F Y  /  C M D",ACCENT))
-            print(paint(flower_frame(frame*0.11,width,height),ACCENT))
-            print(paint("  "+label+" "+"."*(frame%4),DIM),flush=True)
-            time.sleep(0.055);frame+=1
-    finally: print("\033[?25h",end="",flush=True)
+def flower_frame(phase,width=75,height=33,color=False,bloom=1.0):
+    pixels=[[None]*width for _ in range(height)]
+    ca,sa=math.cos(phase*.48),math.sin(phase*.48)
+    tilt=.20+.18*math.sin(phase*.6)
+    ct,st=math.cos(tilt),math.sin(tilt)
+    def point(x,y,z,shade,kind):
+        x,y=x*ca-y*sa,x*sa+y*ca
+        y,z=y*ct-z*st,y*st+z*ct
+        scale=min((width-2)/4.8,(height-2)/2.3)*max(.025,bloom)
+        p=4.5/(4.5-z)
+        ix=round((width-1)/2+x*scale*1.8*p)
+        iy=round((height-1)/2-y*scale*p)
+        if 0<=ix<width and 0<=iy<height and (pixels[iy][ix] is None or z>pixels[iy][ix][0]):
+            pixels[iy][ix]=(z,max(0,min(1,shade)),kind)
+    for layer in range(2):
+        for petal in range(5):
+            theta=petal*2*math.pi/5+layer*.66
+            cs,sn=math.cos(theta),math.sin(theta)
+            for i in range(31):
+                u=i/30
+                r=.13+u*(.90 if layer==0 else .57)
+                spread=(.49 if layer==0 else .29)*math.sin(math.pi*u)**.7
+                for j in range(25):
+                    v=j/12-1
+                    y=v*spread
+                    z=(.18+.23*layer+.12*u+.31*v*v*u+.19*u**5)*bloom
+                    z+=.045*math.sin(v*9+u*8+petal)*u
+                    shade=.24+.38*u+.24*abs(v)+.13*math.cos(theta+1.1)+.10*math.sin(u*12+v*4)
+                    point(r*cs-y*sn,r*sn+y*cs,z,shade,0)
+    for i in range(14):
+        r=.155*i/13
+        for j in range(50):
+            t=j*2*math.pi/50
+            point(r*math.cos(t),r*math.sin(t),.58-.8*r,.45+.4*math.cos(t+1)*r/.155,1)
+    chars=".:;i+ox%#@"
+    rows=[]
+    for row in pixels:
+        line=[];prev=None
+        for pix in row:
+            if pix is None:
+                if color and prev is not None:line.append(RESET);prev=None
+                line.append(" ");continue
+            _,shade,kind=pix
+            band=min(9,int(shade*10));ch=chars[band]
+            if kind:rgb=(min(255,130+band*14),min(255,75+band*16),45+band*8)
+            else:rgb=(min(255,83+band*20),min(255,17+band*25),min(255,46+band*22))
+            if color and rgb!=prev:line.append("\033[38;2;%d;%d;%dm"%rgb);prev=rgb
+            line.append(ch)
+        if color:line.append(RESET)
+        rows.append("".join(line))
+    return "\n".join(rows)
 
-class NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self,*args,**kwargs): return None
-def cloud(action,**values):
-    p=urlparse(API)
-    if not API or p.username or p.password or p.query or p.fragment or not (p.scheme=="https" and p.hostname or p.scheme=="http" and p.hostname in ("localhost","127.0.0.1","::1")):
-        raise RuntimeError("Cloud endpoint not configured; set ZUZIFY_API_URL.")
-    headers={"Content-Type":"application/json","User-Agent":"ZuzifyCMD/"+VERSION}
-    if token: headers["Authorization"]="Bearer "+token
-    req=Request(API,data=json.dumps({"action":action,**values}).encode(),headers=headers)
+def animate(duration=3.0,done=None,label="Starting ZuzifyCMD"):
+    if not TTY:return
+    start=time.monotonic()
+    print("\033[?25l\033[2J",end="",flush=True)
     try:
-        with build_opener(NoRedirect()).open(req,timeout=8) as r:
-            return json.loads(r.read(1024*1024))
-    except HTTPError as e:
-        try: msg=json.loads(e.read(4096)).get("error","Cloud request failed")
-        except Exception: msg="Cloud request failed"
-        raise RuntimeError(safe(msg)) from None
-    except (OSError,ValueError) as e: raise RuntimeError("Cloud unavailable.") from e
+        while True:
+            elapsed=time.monotonic()-start
+            if elapsed>=duration and (done is None or done.is_set()):break
+            if elapsed>12:break
+            size=shutil.get_terminal_size((100,36))
+            w=max(15,min(85,size.columns-4));h=max(7,min(35,size.lines-5))
+            grow=min(1,elapsed/1.65);grow=grow*grow*(3-2*grow)
+            art=flower_frame(elapsed,w,h,True,grow)
+            pad=" "*max(0,(size.columns-w)//2)
+            lines=["\033[2K"+pad+r for r in art.split("\n")]
+            print("\033[H"+"\n".join(lines)+"\n\033[2K"+paint(("Z U Z I F Y  /  C M D").center(max(15,size.columns-1)),WHITE)+"\n\033[2K"+paint(label.center(max(15,size.columns-1)),DIM),end="",flush=True)
+            time.sleep(.045)
+    finally:print("\033[?25h"+RESET,end="",flush=True)
+
+def load_connection():
+    global DSN
+    try:
+        import keyring
+        DSN=keyring.get_password("ZuzifyCMD","neon-connection") or ""
+    except Exception:DSN=""
+
+def configure_connection():
+    global DSN
+    candidate=getpass.getpass("  Paste your restricted Neon connection URL (hidden): ").strip()
+    if not candidate:return
+    old=DSN;DSN=candidate
+    try:cloud("catalog")
+    except Exception:
+        DSN=old
+        raise
+    if input("  Save to Windows Credential Manager? [y/N] ").strip().lower()=="y":
+        try:
+            import keyring
+            keyring.set_password("ZuzifyCMD","neon-connection",DSN)
+        except Exception:print("  Credential storage unavailable; connection works for this session.")
+    print("  "+refresh())
+
+def forget_connection():
+    global DSN,user,token
+    try:
+        if token:cloud("logout")
+    except Exception:pass
+    DSN="";user,token="guest",""
+    try:
+        import keyring
+        keyring.delete_password("ZuzifyCMD","neon-connection")
+    except Exception:pass
+    print("  "+refresh())
+
+def cloud(action,**values):
+    if not DSN:raise RuntimeError("Type connect to configure your Neon connection.")
+    try:
+        import psycopg,certifi
+        from psycopg.conninfo import conninfo_to_dict
+        params=conninfo_to_dict(DSN)
+        host=params.get("host","")
+        if not re.fullmatch(r"[a-zA-Z0-9.-]+\.neon\.tech",host) or not params.get("user") or not params.get("dbname") or not params.get("password"):
+            raise ValueError("Invalid Neon connection URL")
+        if set(params)-{"host","port","user","password","dbname","sslmode","channel_binding"}:
+            raise ValueError("Unsupported connection options")
+        with psycopg.connect(host=host,port=params.get("port",5432),user=params["user"],password=params["password"],dbname=params["dbname"],sslmode="verify-full",sslrootcert=certifi.where(),connect_timeout=6,options="-c statement_timeout=10000") as conn:
+            with conn.cursor() as cur:
+                if action=="catalog":cur.execute("SELECT zuzifycmd.direct_catalog()")
+                elif action in ("login","register"):cur.execute("SELECT zuzifycmd.direct_auth(%s,%s,%s)",(action,values["username"],values["password"]))
+                elif action in ("me","logout"):cur.execute("SELECT zuzifycmd.direct_session(%s,%s)",(action,token))
+                else:raise ValueError("Unknown cloud action")
+                result=cur.fetchone()[0]
+        if result.get("error"):raise RuntimeError(safe(result["error"]))
+        return result
+    except RuntimeError:raise
+    except Exception:raise RuntimeError("Neon connection failed. Check your connection URL, restricted role grants, and network.") from None
 
 def refresh():
     global catalog
@@ -163,6 +247,8 @@ def execute(handler,arg):
         finally:user,token="guest",""
         print("Signed out.")
     elif handler=="sync":print(refresh())
+    elif handler=="connect":configure_connection()
+    elif handler=="disconnect":forget_connection()
     elif handler=="update":
         result=check_update();print(result["status"])
         if "url" in result and input("Download verified update? [y/N] ").strip().lower()=="y":download_update(result)
@@ -186,11 +272,13 @@ def execute(handler,arg):
 def main():
     if "--self-test" in sys.argv:
         assert version_tuple("v1.2.3")==(1,2,3)
-        assert len(flower_frame(0).splitlines())==17
+        assert len(flower_frame(0).splitlines())==33
+        assert "\033[38;2;" in flower_frame(0,color=True)
         assert flower_frame(0)!=flower_frame(1)
         assert safe("hello\033[31m")=="hello[31m"
         print("Self-test passed.");return
     enable_vt()
+    load_connection()
     done=threading.Event();status=[]
     def boot():
         try:status.append(refresh())
@@ -201,7 +289,7 @@ def main():
     clear()
     print(paint("  Z U Z I F Y  /  C M D",ACCENT))
     print(paint("  v"+VERSION+" | "+(status[0] if status else "Offline")+" | help for commands",DIM))
-    print("  login / register / guest")
+    print("  connect / login / register / help")
     notified=False
     while True:
         if updates and not notified:print(paint("  "+updates["status"],DIM));notified=True
