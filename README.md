@@ -1,16 +1,5 @@
-# ZuzifyCMD 1.1.0
-Double-click ZuzifyCMD.exe from GitHub Releases. No PowerShell, Node server, API, or Electron required. The loader is a shaded pink/white 3D ASCII flower that grows from a glowing center. Offline commands work immediately.
-
-## Direct Neon setup (private/trusted desktop)
-The Neon project is Zuzify App Data, database zuzify, schema zuzifycmd. Direct SQL functions are installed. Create a dedicated restricted login role (not owner, no table permissions or inherited admin roles), and grant only:
-```sql
-GRANT CONNECT ON DATABASE zuzify TO your_restricted_role;
-GRANT USAGE ON SCHEMA zuzifycmd TO your_restricted_role;
-GRANT EXECUTE ON FUNCTION zuzifycmd.direct_catalog(), zuzifycmd.direct_auth(text,text,text), zuzifycmd.direct_session(text,text) TO your_restricted_role;
-```
-In the EXE, type connect, paste the restricted role's Neon URL at the hidden prompt, and optionally save it to Windows Credential Manager. TLS certificate and hostname verification are required. Use register or login for CMD accounts. Do not distribute shared database credentials or embed them in the EXE. For a public consumer service, use an identity-aware backend. The previous API source is retained for reference only; not needed by this client. Direct accounts use bcrypt and the old API uses a different format.
-
-Type help, sync, flower, or update. Startup checks GitHub for updates automatically; installation of verified downloads is manual.
-
-## Build
-Install requirements.txt with Python 3.12, then run python client/zuzifycmd.py --self-test. GitHub Actions builds and tests the Windows EXE before publishing.
+# ZuzifyCMD v1.2.0.0a
+Windows per-user installer, no PowerShell or manual Neon connection. The client calls the HTTPS service at zuzifycmd.vercel.app; the service alone holds the limited database credential. Startup sends a random locally stored installation UUID and version, not hardware fingerprints. Counts are observed first launches (not exact downloads); online means a heartbeat within 90 seconds. Sessions can be remembered with Windows Credential Manager. 
+Commands: 432 conversions plus account, owner, friends, text utilities and system features. Owner commands are authorized by database rank; register the intended account and grant owner only after independently verifying its identity. Pro export is server-gated.
+Discord generates an 8-digit code; a trusted bot must call the database discord_confirm function with the verified Discord identity. Do not grant that function to the public client or service.
+Private source repository: Windows installer is a CI artifact. Publish only the installer to a separate HTTPS download location and put its tag, URL and SHA256 digest in the Neon settings update row. Never distribute a private GitHub token. Update checks automatic; verified installer download requires confirmation.
