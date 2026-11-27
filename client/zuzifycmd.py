@@ -417,7 +417,8 @@ def main():
         if updates and not notified:print(paint("  "+updates["status"],DIM));notified=True
         try:
             visible=[n for n in catalog if not n.startswith("owner") or PROFILE.get("rank")=="owner"]
-            raw=tui.read_command(paint("\n"+user+"@zuzify",ACCENT)+paint(" ["+safe(PROFILE.get("rank","guest"))+"]",DIM)+" > ",visible).strip()
+            print()
+            raw=tui.read_command(paint(user+"@zuzify",ACCENT)+paint(" ["+safe(PROFILE.get("rank","guest"))+"]",DIM)+" > ",visible).strip()
             if not raw:continue
             name,_,arg=raw.partition(" ");row=catalog.get(name.lower())
             if not row:
