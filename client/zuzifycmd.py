@@ -2,13 +2,14 @@ import secrets, random, colorsys, base64, datetime, getpass, hashlib, json, math
 from pathlib import Path
 import blossom
 import terminal_ui as tui
+import local_tools
 import difflib
 import unicodedata
 from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
-VERSION = "1.2.0.3a"
+VERSION = "1.2.0.4a"
 RELEASE_API = "https://api.github.com/repos/taithedev/ZuzifyCMD/releases/latest"
 API = "https://zuzifycmd.vercel.app/api/cmd"
 INSTALL = ""
@@ -138,11 +139,13 @@ def heartbeat():
 CORE.update({"dashboard":"Show the Zuzify dashboard","status":"Show connection and session status","history":"Show recent command names","shortcuts":"Show keyboard shortcuts","categories":"List command groups","textstats":"Analyze text length","slug":"Convert text to a URL slug","timestamp":"Print Unix timestamp","fromtimestamp":"Convert Unix timestamp to UTC","randomnum":"Generate a random integer"})
 CORE.update({"rarity":"Show startup flower rarity","rarities":"List flower rarity chances","search":"Search command names and descriptions","login":"Sign in","register":"Create account","profile":"Show rank and profile","redeem":"Redeem a license key","friends":"Show friend requests and friends","friendadd":"Add a friend","friendaccept":"Accept a request","friendremove":"Remove a friend","discord":"Create an eight digit pairing code","discordunlink":"Unlink Discord","prostatus":"View paid entitlement","ownerstats":"Owner dashboard","ownerusers":"List users and presence","ownerban":"Ban account","ownerunban":"Unban account","ownerkick":"Revoke user sessions","ownerrank":"Change rank","ownerkey":"Create a Pro license","ownermotd":"Set message of the day","owneraudit":"Review moderation audit","motd":"Show message of the day","online":"Show active app count","calc":"Basic calculator","reverse":"Reverse text","count":"Count characters and words","upper":"Uppercase text","lower":"Lowercase text","json":"Format JSON","hex":"Encode text as hex","unhex":"Decode hex","timer":"Start a local timer","color":"Select loader color","export":"Export your profile to JSON"})
 UNITS = {"length":{"mm":0.001,"cm":0.01,"dm":0.1,"m":1,"km":1000,"um":0.000001,"nm":1e-9,"in":0.0254,"ft":0.3048,"yd":0.9144,"mi":1609.344,"nmi":1852,"ang":1e-10,"fathom":1.8288,"furlong":201.168},"mass":{"mg":0.000001,"g":0.001,"kg":1,"t":1000,"ug":1e-9,"lb":0.45359237,"oz":0.028349523125,"st":6.35029318,"grain":0.00006479891,"carat":0.0002,"shortton":907.18474,"longton":1016.0469088},"time":{"ms":0.001,"s":1,"min":60,"h":3600,"d":86400,"w":604800,"us":0.000001,"ns":1e-9,"fortnight":1209600,"day365":31536000}}
+UNITS.update({"data":{"bit":0.125,"byte":1,"kb":1000,"mb":1000000,"gb":1000000000,"tb":1000000000000,"pb":1000000000000000,"eb":1000000000000000000,"kib":1024,"mib":1048576,"gib":1073741824,"tib":1099511627776,"pib":1125899906842624,"eib":1152921504606847000,"kbit":125,"mbit":125000},"area":{"mm2":0.000001,"cm2":0.0001,"dm2":0.01,"m2":1,"km2":1000000,"um2":1e-12,"nm2":1e-18,"in2":0.00064516,"ft2":0.09290304,"yd2":0.83612736,"mi2":2589988.110336,"acre":4046.8564224,"ha":10000,"are":100,"rood":1011.7141056},"volume":{"ml":0.001,"l":1,"kl":1000,"ul":0.000001,"nl":1e-9,"m3":1000,"cm3":0.001,"mm3":0.000001,"usgal":3.785411784,"usqt":0.946352946,"uspt":0.473176473,"uscup":0.2365882365,"usfloz":0.0295735295625,"impgal":4.54609},"speed":{"mps":1,"kph":0.2777777777777778,"mph":0.44704,"knot":0.5144444444444445,"fps":0.3048,"ips":0.0254,"cmps":0.01,"mmps":0.001,"kmps":1000,"mmin":0.016666666666666666,"ftmin":0.00508,"ydps":0.9144,"ydmin":0.01524},"pressure":{"pa":1,"kpa":1000,"mpa":1000000,"gpa":1000000000,"hpa":100,"bar":100000,"mbar":100,"atm":101325,"psi":6894.757293168,"torr":133.32236842105263,"mmhg":133.322387415,"inhg":3386.389},"energy":{"j":1,"kj":1000,"mj":1000000,"wh":3600,"kwh":3600000,"mwh":3600000000,"cal":4.184,"kcal":4184}})
+CORE.update(local_tools.TOOLS)
 CONVERSIONS = {f"{cat}_{a}_{b}":(cat,a,b) for cat,units in UNITS.items() for a in units for b in units if a!=b}
 
 def refresh():
     global catalog,CLOUD_STATE
-    local={k:{"handler":k,"description":v,"category":"local"} for k,v in CORE.items()}
+    local={k:{"handler":k,"description":v,"category":local_tools.CATEGORIES.get(k,"local")} for k,v in CORE.items()}
     local.update({k:{"handler":v,"description":"Alias for "+v,"category":"local"} for k,v in ALIASES.items()})
     local.update({k:{"handler":"convert","description":f"Convert {a} to {b}","category":cat} for k,(cat,a,b) in CONVERSIONS.items()})
     try:
@@ -374,6 +377,7 @@ def execute(handler,arg,name=""):
         profile=cloud("me");folder=Path.home()/"Downloads";folder.mkdir(exist_ok=True)
         path=folder/("ZuzifyCMD-profile-"+uuid.uuid4().hex[:8]+".json");path.write_text(json.dumps(profile,indent=2),encoding="utf-8");print("Saved "+str(path))
     elif handler=="about":print("ZuzifyCMD "+VERSION+" / By Zuzify")
+    elif handler in local_tools.TOOLS:local_tools.run(handler,arg)
     return True
 
 def show_dashboard():
@@ -381,7 +385,7 @@ def show_dashboard():
 
 def main():
     if "--self-test" in sys.argv:
-        assert version_tuple("v1.2.0.3a")==(1,2,0,3,97)
+        assert version_tuple("v1.2.0.4a")==(1,2,0,4,97)
         PROFILE["rank"]="owner";apply_flower_rank();assert STARTUP_FLOWER[0]=="rainbow" and STARTUP_FLOWER[2]==100
         PROFILE.clear();apply_flower_rank();assert STARTUP_FLOWER==ROLLED_FLOWER
         assert len(blossom.petals())>19000
@@ -395,7 +399,12 @@ def main():
         assert password_problem("","test_user")
         assert password_problem("short","test_user")
         assert not password_problem("correct-horse-battery-planet","test_user")
-        assert len(CONVERSIONS)==432
+        assert len(CONVERSIONS)==1408
+        local_tools.self_test()
+        assert len(set(CORE)|set(ALIASES)|set(CONVERSIONS))==1500
+        assert abs(UNITS["speed"]["mph"]/UNITS["speed"]["kph"]-1.609344)<1e-9
+        assert UNITS["data"]["kib"]==1024
+        assert UNITS["volume"]["usgal"]==3.785411784
         assert len(flower_frame(0).splitlines())==35
         assert "\033[38;2;" in flower_frame(0,color=True)
         assert flower_frame(0)!=flower_frame(1)
@@ -428,6 +437,8 @@ def main():
             if not row:
                 suggestions=difflib.get_close_matches(name.lower(),visible,n=3,cutoff=.55)
                 print("  Unknown command."+(" Did you mean "+", ".join(suggestions)+"?" if suggestions else " Type help."));continue
+            if name.lower().startswith("owner") and PROFILE.get("rank")!="owner":
+                print("  Owner rank required.");continue
             tui.remember(name.lower())
             if not execute(row["handler"],arg,name.lower()):break
         except (KeyboardInterrupt,EOFError):print("\nBye.");break
