@@ -1,6 +1,6 @@
-# ZuzifyCMD v1.2.0.4a
+# ZuzifyCMD v1.2.0.6a
 Windows per-user installer, no PowerShell or manual Neon connection. The client calls the HTTPS service at zuzifycmd.vercel.app; the service alone holds the limited database credential. Startup sends a random locally stored installation UUID and version, not hardware fingerprints. Counts are observed first launches (not exact downloads); online means a heartbeat within 90 seconds. Sessions can be remembered with Windows Credential Manager. 
-Commands: 432 conversions plus account, owner, friends, text utilities and system features. Owner commands are authorized by database rank; register the intended account and grant owner only after independently verifying its identity. Pro export is server-gated.
+Commands: 2,400 conversions plus account, owner, friends, text utilities and system features. Owner commands are authorized by database rank; register the intended account and grant owner only after independently verifying its identity. Pro export is server-gated.
 Discord generates an 8-digit code; a trusted bot must call the database discord_confirm function with the verified Discord identity. Do not grant that function to the public client or service.
 Private source repository: Windows installer is a CI artifact. Publish only the installer to a separate HTTPS download location and put its tag, URL and SHA256 digest in the Neon settings update row. Never distribute a private GitHub token. Update checks automatic; verified installer download requires confirmation.
 
@@ -14,3 +14,6 @@ The .3a version includes the single-line editor redraw fix and additional render
 
 ## 1,500 commands
 1,408 named unit conversion operations plus 92 core and utility commands. Includes fixed local Windows diagnostics: ipconfig, ipconfigall, netadapters, localroutes, netstats, processlist, memory, diskspace, cpuinfo, systeminfo, filehash and more. Diagnostic output stays on the local PC. No arbitrary shell invocation or remote execution. The command catalog is synchronized with Neon.
+
+## v1.2.0.6a
+2,500 commands: 2,400 conversions and 100 core/utility commands. Seven spiral petal rings, 44,199 geometry points, curved edges, petal veins, depth shading and animated particles. Existing rarity weights and owner rainbow are preserved. Database catalog migration is in database/catalog_2500.sql.

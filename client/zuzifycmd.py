@@ -3,13 +3,14 @@ from pathlib import Path
 import blossom
 import terminal_ui as tui
 import local_tools
+import text_tools
 import difflib
 import unicodedata
 from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 
-VERSION = "1.2.0.4a"
+VERSION = "1.2.0.6a"
 RELEASE_API = "https://api.github.com/repos/taithedev/ZuzifyCMD/releases/latest"
 API = "https://zuzifycmd.vercel.app/api/cmd"
 INSTALL = ""
@@ -76,7 +77,7 @@ def animate(duration=15,done=None,label="Initializing ZuzifyCMD"):
         while True:
             elapsed=time.monotonic()-start
             if elapsed>=duration:break
-            size=shutil.get_terminal_size((110,42));w=max(15,min(101,size.columns-4));h=max(7,min(39,size.lines-6))
+            size=shutil.get_terminal_size((110,42));w=max(15,min(125,size.columns-4));h=max(7,min(49,size.lines-6))
             grow=min(1,elapsed/max(.1,duration*.65));grow=grow*grow*(3-2*grow)
             art=flower_frame(elapsed,w,h,True,grow)
             pad=" "*max(0,(size.columns-w)//2);bar="━"*int(24*elapsed/duration)+"─"*(24-int(24*elapsed/duration))
@@ -84,7 +85,7 @@ def animate(duration=15,done=None,label="Initializing ZuzifyCMD"):
             rarity_label=flower_label().upper() if PALETTE==STARTUP_FLOWER[0] else f"{PALETTE.upper()} / PREVIEW"
             if elapsed<duration*.65:rarity_label="B L O O M I N G"
             print("\033[H"+"\n".join("\033[2K"+pad+r for r in art.split("\n"))+"\n\033[2K"+paint(("Z U Z I F Y  /  C M D   "+VERSION).center(max(15,size.columns-1)),WHITE)+"\n\033[2K"+paint((bar+"  "+str(int(elapsed/duration*100))+"%").center(max(15,size.columns-1)),DIM)+"\n\033[2K"+paint(status.center(max(15,size.columns-1)),DIM)+"\n\033[2K"+paint(rarity_label.center(max(15,size.columns-1)),WHITE),end="",flush=True)
-            time.sleep(.035)
+            time.sleep(.015)
     finally:print("\033[?25h"+RESET,end="",flush=True)
 
 class NoRedirect(HTTPRedirectHandler):
@@ -140,12 +141,14 @@ CORE.update({"dashboard":"Show the Zuzify dashboard","status":"Show connection a
 CORE.update({"rarity":"Show startup flower rarity","rarities":"List flower rarity chances","search":"Search command names and descriptions","login":"Sign in","register":"Create account","profile":"Show rank and profile","redeem":"Redeem a license key","friends":"Show friend requests and friends","friendadd":"Add a friend","friendaccept":"Accept a request","friendremove":"Remove a friend","discord":"Create an eight digit pairing code","discordunlink":"Unlink Discord","prostatus":"View paid entitlement","ownerstats":"Owner dashboard","ownerusers":"List users and presence","ownerban":"Ban account","ownerunban":"Unban account","ownerkick":"Revoke user sessions","ownerrank":"Change rank","ownerkey":"Create a Pro license","ownermotd":"Set message of the day","owneraudit":"Review moderation audit","motd":"Show message of the day","online":"Show active app count","calc":"Basic calculator","reverse":"Reverse text","count":"Count characters and words","upper":"Uppercase text","lower":"Lowercase text","json":"Format JSON","hex":"Encode text as hex","unhex":"Decode hex","timer":"Start a local timer","color":"Select loader color","export":"Export your profile to JSON"})
 UNITS = {"length":{"mm":0.001,"cm":0.01,"dm":0.1,"m":1,"km":1000,"um":0.000001,"nm":1e-9,"in":0.0254,"ft":0.3048,"yd":0.9144,"mi":1609.344,"nmi":1852,"ang":1e-10,"fathom":1.8288,"furlong":201.168},"mass":{"mg":0.000001,"g":0.001,"kg":1,"t":1000,"ug":1e-9,"lb":0.45359237,"oz":0.028349523125,"st":6.35029318,"grain":0.00006479891,"carat":0.0002,"shortton":907.18474,"longton":1016.0469088},"time":{"ms":0.001,"s":1,"min":60,"h":3600,"d":86400,"w":604800,"us":0.000001,"ns":1e-9,"fortnight":1209600,"day365":31536000}}
 UNITS.update({"data":{"bit":0.125,"byte":1,"kb":1000,"mb":1000000,"gb":1000000000,"tb":1000000000000,"pb":1000000000000000,"eb":1000000000000000000,"kib":1024,"mib":1048576,"gib":1073741824,"tib":1099511627776,"pib":1125899906842624,"eib":1152921504606847000,"kbit":125,"mbit":125000},"area":{"mm2":0.000001,"cm2":0.0001,"dm2":0.01,"m2":1,"km2":1000000,"um2":1e-12,"nm2":1e-18,"in2":0.00064516,"ft2":0.09290304,"yd2":0.83612736,"mi2":2589988.110336,"acre":4046.8564224,"ha":10000,"are":100,"rood":1011.7141056},"volume":{"ml":0.001,"l":1,"kl":1000,"ul":0.000001,"nl":1e-9,"m3":1000,"cm3":0.001,"mm3":0.000001,"usgal":3.785411784,"usqt":0.946352946,"uspt":0.473176473,"uscup":0.2365882365,"usfloz":0.0295735295625,"impgal":4.54609},"speed":{"mps":1,"kph":0.2777777777777778,"mph":0.44704,"knot":0.5144444444444445,"fps":0.3048,"ips":0.0254,"cmps":0.01,"mmps":0.001,"kmps":1000,"mmin":0.016666666666666666,"ftmin":0.00508,"ydps":0.9144,"ydmin":0.01524},"pressure":{"pa":1,"kpa":1000,"mpa":1000000,"gpa":1000000000,"hpa":100,"bar":100000,"mbar":100,"atm":101325,"psi":6894.757293168,"torr":133.32236842105263,"mmhg":133.322387415,"inhg":3386.389},"energy":{"j":1,"kj":1000,"mj":1000000,"wh":3600,"kwh":3600000,"mwh":3600000000,"cal":4.184,"kcal":4184}})
+UNITS.update({"angle":{"rad":1,"deg":0.017453292519943295,"grad":0.015707963267948967,"turn":6.283185307179586,"arcmin":0.0002908882086657216,"arcsec":0.00000484813681109536,"urad":0.000001,"mrad":0.001,"quadrant":1.5707963267948966,"sextant":1.0471975511965976,"octant":0.7853981633974483,"sign":0.5235987755982988,"hourangle":0.2617993877991494,"minuteangle":0.004363323129985824,"secondangle":0.0000727220521664304,"mil_nato":0.0009817477042468104,"mil_sv":0.0009973310011396168,"mil_ru":0.0010471975511965976,"point":0.19634954084936207,"brad":0.02454369260617026},"force":{"n":1,"kn":1000,"dyn":0.00001,"kgf":9.80665,"gf":0.00980665,"mgf":0.00000980665,"lbf":4.4482216152605,"ozf":0.2780138509537812,"pdl":0.138254954376,"kip":4448.2216152605,"tf":9806.65,"short_tonf":8896.443230521,"long_tonf":9964.01641818352,"un":0.000001,"mn":0.001,"megan":1000000},"power":{"uw":0.000001,"mw":0.001,"w":1,"kw":1000,"mwatt":1000000,"gw":1000000000,"tw":1000000000000,"hp_mech":745.6998715822702,"hp_metric":735.49875,"btuph":0.2930710701722222,"btups":1055.05585262,"ftlbps":1.3558179483314,"ftlbpm":0.0225969658055233,"ergps":1e-7,"calps":4.184},"frequency":{"hz":1,"khz":1000,"mhz":1000000,"ghz":1000000000,"thz":1000000000000,"rpm":0.016666666666666666,"cpm":0.016666666666666666,"cph":0.0002777777777777778,"bpm":0.016666666666666666,"rps":1},"density":{"kgm3":1,"gcm3":1000,"gml":1000,"mgml":1,"lbft3":16.01846337396014,"lbin3":27679.904710191,"ozgal_us":7.489151707306039,"ozin3":1729.994044999,"slugft3":515.378818}})
+CORE.update(text_tools.TOOLS)
 CORE.update(local_tools.TOOLS)
 CONVERSIONS = {f"{cat}_{a}_{b}":(cat,a,b) for cat,units in UNITS.items() for a in units for b in units if a!=b}
 
 def refresh():
     global catalog,CLOUD_STATE
-    local={k:{"handler":k,"description":v,"category":local_tools.CATEGORIES.get(k,"local")} for k,v in CORE.items()}
+    local={k:{"handler":k,"description":v,"category":local_tools.CATEGORIES.get(k,"text" if k in text_tools.TOOLS else "local")} for k,v in CORE.items()}
     local.update({k:{"handler":v,"description":"Alias for "+v,"category":"local"} for k,v in ALIASES.items()})
     local.update({k:{"handler":"convert","description":f"Convert {a} to {b}","category":cat} for k,(cat,a,b) in CONVERSIONS.items()})
     try:
@@ -270,9 +273,12 @@ def execute(handler,arg,name=""):
     elif handler=="search":
         q=arg.lower().strip()
         if not q:raise ValueError("Use search <term>")
+        hits=[]
         for n,row in sorted(catalog.items()):
             if n.startswith("owner") and PROFILE.get("rank")!="owner":continue
-            if q in (n+" "+row["description"]).lower():print(f"  {n:24} {row['description']}")
+            if q in (n+" "+row["description"]+" "+row["category"]).lower():hits.append((n,row))
+        for n,row in hits[:80]:print(f"  {n:32} {row['description']}")
+        print(f"  {len(hits)} matches"+(" (first 80 shown; narrow your search)" if len(hits)>80 else ""))
     elif handler=="dashboard":
         clear();show_dashboard()
     elif handler=="status":
@@ -378,6 +384,7 @@ def execute(handler,arg,name=""):
         path=folder/("ZuzifyCMD-profile-"+uuid.uuid4().hex[:8]+".json");path.write_text(json.dumps(profile,indent=2),encoding="utf-8");print("Saved "+str(path))
     elif handler=="about":print("ZuzifyCMD "+VERSION+" / By Zuzify")
     elif handler in local_tools.TOOLS:local_tools.run(handler,arg)
+    elif handler in text_tools.TOOLS:text_tools.run(handler,arg)
     return True
 
 def show_dashboard():
@@ -385,10 +392,10 @@ def show_dashboard():
 
 def main():
     if "--self-test" in sys.argv:
-        assert version_tuple("v1.2.0.4a")==(1,2,0,4,97)
+        assert version_tuple("v1.2.0.6a")==(1,2,0,6,97)
         PROFILE["rank"]="owner";apply_flower_rank();assert STARTUP_FLOWER[0]=="rainbow" and STARTUP_FLOWER[2]==100
         PROFILE.clear();apply_flower_rank();assert STARTUP_FLOWER==ROLLED_FLOWER
-        assert len(blossom.petals())>19000
+        assert len(blossom.petals())>40000
         assert all(len(row)==85 for row in flower_frame(1).splitlines())
         assert "Guaranteed" not in flower_label()
         tui.remember("help");tui.remember("help");assert list(tui.HISTORY)==["help"]
@@ -399,9 +406,10 @@ def main():
         assert password_problem("","test_user")
         assert password_problem("short","test_user")
         assert not password_problem("correct-horse-battery-planet","test_user")
-        assert len(CONVERSIONS)==1408
+        assert len(CONVERSIONS)==2400
+        text_tools.self_test()
         local_tools.self_test()
-        assert len(set(CORE)|set(ALIASES)|set(CONVERSIONS))==1500
+        assert len(set(CORE)|set(ALIASES)|set(CONVERSIONS))==2500
         assert abs(UNITS["speed"]["mph"]/UNITS["speed"]["kph"]-1.609344)<1e-9
         assert UNITS["data"]["kib"]==1024
         assert UNITS["volume"]["usgal"]==3.785411784
